@@ -4,6 +4,8 @@ import TicketRouter from "./tickets/route";
 import { ErrorHandler } from "./utils/errors/errorHandler";
 import PostgresDB from "./config/database/postgres";
 import AblyRT from "./config/ably";
+import { variables } from "./config/envLoader";
+import AgentRouter from "./agents/route";
 const fastify = Fastify({
     logger: true,
 });
@@ -25,6 +27,10 @@ class Server {
         this.app.register(new TicketRouter().ticketRoutes, {
             prefix: "/api/v1/tickets",
         });
+
+        this.app.register(new AgentRouter().agentRoutes, {
+            prefix: "/api/v1/agents",
+        });
     }
 
     public async start() {
@@ -40,7 +46,7 @@ class Server {
     }
 }
 
-const server = new Server(9900);
+const server = new Server(parseInt(variables.PORT));
 server.start();
 
 process.on("SIGTERM", (signal) => {

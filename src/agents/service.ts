@@ -1,9 +1,10 @@
 import { v4, validate as UuidValidate } from "uuid";
-import TicketsDB from "./db";
+import TicketsDB from "../tickets/db";
 import { IAgent, IAgentCreate } from "./types/interface";
 import moment from "moment";
 import AnotherError from "../utils/errors/anotherError";
 import AgentsDB from "../agents/db";
+import { buildUpdateQuery } from "../tickets/utils";
 
 class AgentsService {
     private ticketsDB = new TicketsDB();
@@ -49,6 +50,11 @@ class AgentsService {
                 null
             );
         }
+        await this.ticketsDB.updateTicketQuery({
+            params: [id],
+            updateFieldsQuery: "assigned_to = null",
+            updateWhereQuery: "assigned_to = $1",
+        });
         const result = await this.agentsDB.deleteAgentQuery(id);
         return result;
     };
