@@ -38,7 +38,7 @@ class Server {
             await new PostgresDB();
             ErrorHandler(this.app);
             this.router();
-            await this.app.listen({ port: this.port });
+            await this.app.listen({ host: "0.0.0.0", port: this.port });
         } catch (err) {
             this.app.log.error(err);
             process.exit(1);
