@@ -42,27 +42,52 @@ class TicketController {
     public fetchAllTicketsController = async (
         req: FastifyRequest<{
             Querystring: {
-                page: number;
                 limit: number;
                 status: string;
                 priority: string;
                 agent: string;
+                sort_by: string;
+                sort_order: string;
+                cursor: string;
+                cursor_id: string;
+                direction: string;
             };
         }>,
         reply: FastifyReply
     ) => {
         try {
-            const { page, limit, status, priority, agent } = req.query;
-            const result = await this.ticketService.fetchAllTicketsService(
-                page,
-                limit,
+            const {
+                limit = 10,
                 status,
+                priority,
                 agent,
-                priority
-            );
+                sort_by = "created_at",
+                sort_order,
+                cursor,
+                cursor_id,
+                direction = "NEXT",
+            } = req.query;
+            const result = await this.ticketService.fetchAllTicketsService({
+                limit,
+                pagination: {
+                    cursor,
+                    cursor_id,
+                    direction,
+                },
+                sort: {
+                    sort_by,
+                    sort_order,
+                },
+                filter: {
+                    filter_status: status,
+                    filter_priority: priority,
+                    filter_agent: agent,
+                },
+            });
             return reply.send({
                 message: "Tickets fetched successfully",
-                data: result,
+                meta: result.meta,
+                data: result.tickets,
             });
         } catch (error: any) {
             console.log(error);

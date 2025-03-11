@@ -54,3 +54,44 @@ export type IPublishMessage = {
         data?: Record<any, any>;
     }>;
 };
+
+export type IAllTicketServiceReqObj = {
+    limit: string | number;
+    pagination: {
+        cursor: string | number;
+        cursor_id: string;
+        direction: string;
+    };
+    sort: {
+        sort_by: string;
+        sort_order: string;
+    };
+    filter: {
+        filter_status?: string;
+        filter_priority?: string;
+        filter_agent?: string;
+    };
+};
+
+export type IMetaResponse = {
+    next: {
+        cursor: string | number | null;
+        cursor_id: string;
+        sort_by: string;
+        sort_order: "ASC" | "DESC";
+    } | null;
+    prev: {
+        cursor: string | number | null;
+        cursor_id: string;
+        sort_by: string;
+        sort_order: "ASC" | "DESC";
+    } | null;
+};
+
+export interface IGeneratePaginationMetaParams {
+    allItems: any[];
+    limit: number;
+    sortData: SortData;
+    paginationData: PaginationData;
+    sortMapper: Record<string, { field: string }>;
+}

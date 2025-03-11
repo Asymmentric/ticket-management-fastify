@@ -49,7 +49,11 @@ class TicketsDB {
         return rows[0] as unknown as ITypeReturnType;
     };
 
-    public fetchTicketsQuery = async (filterQuery: string) => {
+    public fetchTicketsQuery = async (
+        filterQuery: string,
+        orderByQuery: string,
+        limit: string | number
+    ) => {
         const query = `
             SELECT
                 t.id,
@@ -76,8 +80,14 @@ class TicketsDB {
                 priority_types pt ON t.priority_id = pt.id
             LEFT JOIN
                 agents a ON t.assigned_to = a.id
-            ${filterQuery} 
-            AND t.deleted_at IS NULL
+            ${
+                filterQuery.length
+                    ? filterQuery
+                    : " WHERE t.deleted_at IS NULL "
+            } 
+             
+            ${orderByQuery}
+            ${limit}
         `;
 
         const { rows } = await PostgresDB.query(query);

@@ -1,5 +1,12 @@
 import { validate as UuidValidate } from "uuid";
-import { ITicketUpdate } from "./types/interface";
+import {
+    IAllTicketServiceReqObj,
+    IGeneratePaginationMetaParams,
+    IMetaResponse,
+    ITicketDetails,
+    ITicketUpdate,
+} from "./types/interface";
+import { title } from "process";
 
 const filterMapper: Record<
     string,
@@ -24,38 +31,49 @@ const filterMapper: Record<
 
 export const sortMapper: Record<
     string,
-    { key: string; type: string; operator: string }
+    { key: string; type: string; operator: string; field: keyof ITicketDetails }
 > = {
     created_at: {
-        key: "u.created_at",
+        key: "t.created_at",
         type: "sort",
         operator: "ORDER BY t.created_at ?, t.id ?",
+        field: "created_at",
     },
     status: {
         key: "t.status_id",
         type: "sort",
         operator: "ORDER BY t.status_id ?, t.id ?",
+        field: "status",
     },
     priority: {
         key: "t.priority_id",
         type: "sort",
         operator: "ORDER BY t.priority_id ?, t.id ?",
+        field: "priority",
+    },
+    title: {
+        key: "t.title",
+        type: "sort",
+        operator: "ORDER BY t.title ?, t.id ?",
+        field: "title",
     },
 };
 
 export const TicketStatusList = ["open", "in_progress", "resolved", "closed"];
 export const TicketPriorityList = ["low", "medium", "high", "urgent"];
 
-export const buildFilterQuery = (
-    filter_status?: string,
-    filter_priority?: string,
-    filter_agent?: string
-) => {
+export const buildFilterQuery = (data: IAllTicketServiceReqObj) => {
+    const limit =
+        typeof data.limit === "string" ? parseInt(data.limit) : data.limit;
+
+    const { filter_status, filter_priority, filter_agent } = data.filter;
+
     const filterObj: Record<string, any[]> = {
         status: [],
         priority: [],
         agent: [],
     };
+
     if (filter_status) {
         const statusArray = filter_status.split(",").map((i) => parseInt(i));
         filterObj.status = statusArray;
@@ -82,6 +100,12 @@ export const buildFilterQuery = (
 
     const filterArray: string[] = [];
 
+    const sortData = buildSortQuery(data);
+
+    if (sortData.query.length) {
+        filterArray.push(sortData.query);
+    }
+
     Object.entries(filterObj).forEach(([key, value]) => {
         if (value.length > 0) {
             filterArray.push(
@@ -92,25 +116,38 @@ export const buildFilterQuery = (
         }
     });
 
-    return filterArray.length ? ` WHERE ${filterArray.join(" AND ")} ` : "";
+    return {
+        filterQuery: filterArray.length
+            ? ` WHERE ${filterArray.join(" AND ")} `
+            : "",
+        order: sortData.order,
+        pageLimit: data.limit ? ` LIMIT ${limit + 1} ` : "",
+    };
 };
 
 export const buildSortQuery = (
-    cursor_id: string,
-    cursor: string | number,
-    sort_order: string,
-    sort_by: string
+    data: Omit<IAllTicketServiceReqObj, "limit" | "filter">
 ) => {
-    const sortOrder = sort_order === "ASC" ? "ASC" : "DESC";
-    const sortFilter = sort_order === "ASC" ? "<" : ">";
+    const { sort_by = "created_at", sort_order = "ASC" } = data.sort;
+
+    const { cursor, cursor_id } = data.pagination;
+
     const sortDetails = sortMapper[sort_by];
-    const sortFilterQuery = `(${sortDetails.key}, t.id) ${sortFilter} ($?, $?)`;
-    const sortOrderByQuery = ` ${sortDetails.operator.replace("?", sortOrder)}`;
+
+    const sortOrder = sort_order === "ASC" ? "ASC" : "DESC";
+
+    const sortOrderByQuery = ` ${sortDetails.operator.replace(
+        /\?/g,
+        sortOrder
+    )}`;
+
+    const sortFilter = sort_order === "NEXT" ? ">" : "<";
+
+    const sortFilterQuery = `(${sortDetails.key}, t.id) ${sortFilter} ('${cursor}', '${cursor_id}') `;
 
     return {
-        sortFilterQuery: cursor ? sortFilterQuery : "",
-        sortFilterParams: [cursor, cursor_id],
-        sortOrderByQuery,
+        query: cursor ? sortFilterQuery : "",
+        order: sortOrderByQuery,
     };
 };
 
@@ -158,3 +195,57 @@ export const buildUpdateQuery = (data: ITicketUpdate) => {
         params,
     };
 };
+
+export function generatePaginationMeta({
+    allItems,
+    limit,
+    sortData,
+    paginationData,
+    sortMapper,
+}: IGeneratePaginationMetaParams): IMetaResponse {
+    const meta: IMetaResponse = { next: null, prev: null };
+
+    const isLastPage = allItems.length < limit;
+    if (!isLastPage) {
+        allItems.pop();
+        const lastElement = allItems[limit - 1];
+        const cursorField = sortMapper[sortData.sort_by].field;
+
+        const generateCursor = (item: any) => {
+            if (
+                cursorField === "created_at" ||
+                cursorField === "assigned_to" ||
+                cursorField === "priority" ||
+                cursorField === "status"
+            ) {
+                return (
+                    item[cursorField]?.id ||
+                    item[cursorField]?.name ||
+                    item[cursorField] ||
+                    null
+                );
+            }
+            return null;
+        };
+
+        meta.next = {
+            cursor: generateCursor(lastElement),
+            cursor_id: lastElement.id,
+            sort_by: sortData.sort_by,
+            sort_order: sortData.sort_order === "ASC" ? "DESC" : "ASC",
+        };
+
+        meta.prev = {
+            cursor: generateCursor(allItems[0]),
+            cursor_id: allItems[0].id,
+            sort_by: sortData.sort_by,
+            sort_order: sortData.sort_order === "ASC" ? "DESC" : "ASC",
+        };
+    }
+
+    if (!paginationData.cursor) {
+        meta.prev = null;
+    }
+
+    return meta;
+}

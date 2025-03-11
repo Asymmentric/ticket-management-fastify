@@ -17,11 +17,14 @@ export const fetchTicketsValidation: FastifySchema = {
     querystring: {
         type: "object",
         properties: {
-            page: { type: "number" },
             limit: { type: "number" },
             status: { type: "string" },
             priority: { type: "string" },
             agent: { type: "string" },
+            cursor: { type: "string" },
+            cursor_id: { type: "string" },
+            sort_by: { type: "string" },
+            sort_order: { type: "string" },
         },
     },
 };

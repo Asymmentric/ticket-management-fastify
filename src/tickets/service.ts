@@ -1,7 +1,9 @@
 import { v4, validate as UuidValidate } from "uuid";
 import TicketsDB from "./db";
 import {
+    IAllTicketServiceReqObj,
     ICreateTicket,
+    IMetaResponse,
     IPublishMessage,
     ITicket,
     ITicketUpdate,
@@ -11,12 +13,14 @@ import AnotherError from "../utils/errors/anotherError";
 import {
     buildFilterQuery,
     buildUpdateQuery,
+    generatePaginationMeta,
+    sortMapper,
     TicketPriorityList,
     TicketStatusList,
 } from "./utils";
 import AgentsDB from "../agents/db";
 import AblyRT from "../config/ably";
-import { AblyChannels } from "../config/ably/enum";
+import { AblyChannels, AblyEvents } from "../config/ably/enum";
 
 class TicketsService {
     private ticketsDB = new TicketsDB();
@@ -60,7 +64,7 @@ class TicketsService {
         const ably = AblyRT.getInstance();
         const ticketChannel = ably.getChannelById(AblyChannels.TICKETS);
         const publishMessageObj: IPublishMessage = {
-            type: "ticket_created",
+            type: AblyEvents.TICKET_CREATED,
             ticket: [{ message: "Ticket created successfully", data: result }],
         };
 
@@ -69,22 +73,31 @@ class TicketsService {
         return result;
     };
 
-    public fetchAllTicketsService = async (
-        page: number,
-        limit: number,
-        filter_status: string,
-        filter_agent: string,
-        filter_priority: string
-    ) => {
-        const filterQuery = buildFilterQuery(
-            filter_status,
-            filter_priority,
-            filter_agent
+    public fetchAllTicketsService = async (data: IAllTicketServiceReqObj) => {
+        const limit =
+            typeof data.limit === "string" ? parseInt(data.limit) : data.limit;
+        const { filterQuery, order, pageLimit } = buildFilterQuery(data);
+
+        const allTickets = await this.ticketsDB.fetchTicketsQuery(
+            filterQuery,
+            order,
+            pageLimit
         );
 
-        const allTickets = await this.ticketsDB.fetchTicketsQuery(filterQuery);
+        const meta: IMetaResponse = generatePaginationMeta({
+            allItems: allTickets,
+            limit,
+            sortData: data.sort,
+            sortMapper: sortMapper,
+            paginationData: data.pagination,
+        });
 
-        return allTickets;
+        const response = {
+            meta,
+            tickets: allTickets,
+        };
+
+        return response;
     };
 
     public fetchTicketByIdService = async (id: string) => {
@@ -201,6 +214,16 @@ class TicketsService {
             updateWhereQuery,
             params,
         });
+
+        if (!result) {
+            throw new AnotherError(
+                "RESOURCE_NOT_FOUND",
+                "Ticket not found",
+                400,
+                null
+            );
+        }
+
         const lastIndexOfPublishMessage = publishMessageObj.ticket.length - 1;
 
         Object.assign(publishMessageObj.ticket[lastIndexOfPublishMessage], {
@@ -211,7 +234,7 @@ class TicketsService {
 
         const ticketChannel = ably.getChannelById(AblyChannels.TICKETS);
 
-        ticketChannel.publish(AblyChannels.TICKETS, publishMessageObj);
+        ticketChannel.publish(AblyEvents.TICKET_UPDATED, publishMessageObj);
 
         return result;
     };
